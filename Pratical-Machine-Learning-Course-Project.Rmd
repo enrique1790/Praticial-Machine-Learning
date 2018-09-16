@@ -1,0 +1,139 @@
+---
+title: "Pratiacal-Machine_Learning-Project"
+author: "Enrique Estrada"
+date: "September 13, 2018"
+output: html_document
+---
+
+# Practical Machine Learning Course Project
+
+## Introduction
+Data for this project came from the Human Activity Recognition project from Groupware@LES.http://groupware.les.inf.puc-rio.br/har. 
+
+The background for the research is that a number of human subjects performed weightlifting exercises while wearing a number of sensors to track movement. The objective of the research project was to predict how well a particular exercise would be performed, given the multitude of sensor inputs. The possible outcomes were:
+  
+**Class A: correct, done according to the specification
+**Class B: incorrect: elbows thrown to the front
+**Class C: incorrect: dumbbell lifted only halfway
+**Class D: incorrect: dumbbell lowered only halfway
+**Class E: incorrect: hips thrown to the front.
+
+**There are 160 variables in the data set
+
+##Load libraries & Data
+```{r setup, include=FALSE}
+#Libraries
+library(caret)
+```
+
+#Data Download
+
+```{r message=FALSE, warning=FALSE}
+
+training_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testing_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+```{r}
+# download training dataset if it doesn't exist locally 
+if(!file.exists("./pml-training.csv")) {
+  download.file(training_url,destfile = "./pml-training.csv", method = "curl")
+}
+
+# download testing dataset if it doesn't exist locally 
+if(!file.exists("./pml-testing.csv")) {
+  download.file(testing_url,destfile = "./pml-testing.csv", method = "curl")
+}
+
+# During the data import to R, strings matching "NA" and "#DIV/0!" were coerced to NA values in R.
+trainingDataSet <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+testingDataSet<- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+```
+
+## Explorattory Analysis, Data Cleaning, Remove NA's, and Additional Columns
+
+```{r}
+#Exploratory Analysis
+dim(trainingDataSet)
+#[1] 19622   160
+dim(testingDataSet)
+# [1]  20 160
+
+
+colnames(trainingDataSet)[1] <- "observationId"
+names(trainingDataSet)
+names(testingDataSet)
+```      
+
+** Machine learning algorithms work on data without missing values, thus variables with missing values were eliminated.
+```{r}      
+# create a T/F vector identify variables with at least one NA
+      missingcols <- sapply(trainingDataSet, function(x) { any(is.na(x)) })
+      
+# replace data by keeping only those variables that don't have missing data
+      trainingDataSet<- trainingDataSet[ , !missingcols]
+      testingDataSet<- testingDataSet[ , !missingcols]
+```      
+## Cross Validation
+In this method, we randomly divide the available data into two parts, a training set, and a validation (test) set. The model is fit on the training set, then the fitted model is used to predict the responses for the observations in the validation set.
+      
+The original dataset pml-training.csv dataset will be randomly sliced into two parts: 
+**a training set (70%) and a test set (30%).
+```{r}       
+# set seed
+      set.seed(123)
+      
+# Create training set indexes with 70% of data  
+      inTrain <- caret::createDataPartition(y = trainingDataSet$classe, p = 0.7, list = FALSE)
+      
+# subsets
+      training <- trainingDataSet[inTrain, ]
+      testing <- trainingDataSet[-inTrain, ]
+      dim(training) ; dim(testing)
+```      
+
+## Prediction Model Building (Test of prediction Models)
+The Two algorithm are applied:
+** Decision Tree 
+** Random Forest 
+      
+## Decision Tree
+```{r}       
+# simple decision tree model, isolating the class (60) as the outcome and  variables 8 - 11 as predictors.  
+      modFit <- caret::train(classe ~ ., method = "rpart", data = training[,c(8:11,60)])
+      
+      rattle::fancyRpartPlot(modFit$finalModel)
+      
+# Perform prediction against the test portion of the training data  
+      predictions <- predict(modFit, newdata = testing[,c(8:11,60)])
+      
+# Evaluate prediction against known classification
+      confusionMatrix(predictions, testing$classe)
+```      
+**The model preforms poorly with a overall accuracy of 40%
+      
+## Random Forest
+```{r}       
+# random forest using all predictors using 
+      modFit.rf <- randomForest::randomForest(classe ~ ., data = training[,c(8:60)])
+      tr <- trainControl(method = "repeatedcv", number = 5 )
+      modFit.rf
+      
+# Perform prediction against the test portion of the training data
+      predictions.rf <- predict(modFit.rf, newdata = testing[,c(8:60)])
+      
+# Evaluate prediction against known classification
+      confusionMatrix(predictions.rf, testing$classe)
+```      
+      ** The accuracy for Random Forest was significantly better at 99.3%
+      ** Based on this approach, we choose to use the Random Forest model to predict against the test data set.
+      
+## Applying the Selected Model on the 20 test cases provided
+In this section, we use random forest model we built in last section to predict the test data and output the result into text files. 
+```{r}       
+# Perform prediction against the Random Forest model
+final_prediction <- predict(modFit.rf,testingDataSet)
+
+# Final prediction
+final_prediction
+```
